@@ -1,0 +1,101 @@
+
+package report
+
+//list any import classes here.
+import com.sbnz.doctor.dto.DiagnosisDTO;
+import com.sbnz.doctor.dto.PatientDTO;
+import com.sbnz.doctor.dto.DiseaseDTO;
+import com.sbnz.doctor.dto.MedicineallergyDTO;
+import com.sbnz.doctor.dto.AllergyDTO;
+import com.sbnz.doctor.dto.ReportDiagnosis;
+import com.sbnz.doctor.dto.TherapyReport;
+import com.sbnz.doctor.model.Patient;
+import com.sbnz.doctor.model.Diagnosis;
+import com.sbnz.doctor.model.Symptom;
+import com.sbnz.doctor.model.Disease;
+import com.sbnz.doctor.services.DiseaseService;
+import com.sbnz.doctor.services.SymptomService;
+import com.sbnz.doctor.services.PatientService;
+import com.sbnz.doctor.utils.SymptomList;
+import com.sbnz.doctor.utils.MedicineList;
+import com.sbnz.doctor.utils.CheckAllergyObject;
+import com.sbnz.doctor.utils.ReportEntity;
+import java.util.List;
+import java.util.HashMap;
+import java.util.Set;
+
+
+//declare any global variables here
+global java.util.Date immunityLimit;
+global java.util.Date chronicLimit;
+global java.util.Date addictLimit;
+
+rule "Chronic disease patients"
+	lock-on-active true
+	no-loop true
+	agenda-group "Chronic"
+    when
+        //conditions
+        $izv : ReportEntity($dijag : diagnoses , $bolesti : diseases , $pacijenti : patients  )
+		$dto: PatientDTO( $pac : patientId  ) from $pacijenti
+        Number( $n : intValue > 5) from accumulate(
+        	DiseaseDTO( $id : diseaseId ) from $bolesti and
+        	ReportDiagnosis( $id == diseaseId && diseaseCode != "PREHL" && diseaseCode != "GROZN" && $pac == patientId && diagnosisDate.getTime() >= chronicLimit.getTime()) from $dijag,
+        	init(int count = 0;),
+        	action(count++;),
+        	result(count)
+        )
+    then
+        //actions
+        $izv.getRetVal().add($dto.getPatientId());
+
+end
+
+rule "Potential addicts"
+    lock-on-active true
+	no-loop true
+	agenda-group "Addicts"
+    when
+        //conditions
+        $izv : ReportEntity($pacijenti : patients , $t : therapies  )
+		$dto: PatientDTO( $pac : patientId  ) from $pacijenti
+		Number ($n : intValue >= 6) from accumulate(
+			$ter: TherapyReport( $lekar : userId, medicineType == 'P' && patientId == $pac && therapyDate.getTime() >= addictLimit.getTime()) from $t,
+			init ( int count = 0; ),
+			action ( count++; $izv.getLekari().add($lekar);),
+			result ( count )
+		)
+    then
+        //actions
+        if($izv.getLekari().size() >= 3){
+        	$izv.getRetVal().add($pac);
+        }
+
+end
+
+rule "Weak immunity"
+    lock-on-active true
+	no-loop true
+	agenda-group "Immunity"
+    when
+        //conditions
+        $izv : ReportEntity($pacijenti : patients , $t : therapies  )
+		$dto: PatientDTO( $pac : patientId  ) from $pacijenti
+		Number ($n : intValue > 10) from accumulate(
+			$ter: TherapyReport(  $tip : medicineType, $bolest : diseaseCode, therapyDate.getTime() >= immunityLimit.getTime() && patientId == $pac ) from $t,
+			init ( int count = 0; ),
+			action ( count++; $izv.getBolesti().add($bolest); $izv.getTipovi().add($ter.getMedicineType());),
+			result ( count )
+		) and Number($n2 : intValue >= 0) from accumulate(
+			$ter: TherapyReport( patientId == $pac, therapyDate.getTime() >= immunityLimit.getTime() && medicineType != 'A') from $t,
+			init ( int count = 0; ),
+			action ( count++; ),
+			result ( count )
+		)
+    then
+        //actions
+        if($izv.getBolesti().size() >= 2 && $n2 == 0){
+        	$izv.getRetVal().add($pac);
+        }
+		
+end
