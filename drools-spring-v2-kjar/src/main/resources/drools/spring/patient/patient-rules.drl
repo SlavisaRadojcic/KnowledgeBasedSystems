@@ -5,3 +5,51 @@ package patient
 import com.sbnz.doctor.dto.DiagnosisDTO;
 import com.sbnz.doctor.dto.PatientDTO;
 import com.sbnz.doctor.dto.DiseaseDTO;
+import com.sbnz.doctor.dto.MedicineallergyDTO;
+import com.sbnz.doctor.dto.AllergyDTO;
+import com.sbnz.doctor.model.Patient;
+import com.sbnz.doctor.model.Diagnosis;
+import com.sbnz.doctor.model.Symptom;
+import com.sbnz.doctor.model.Disease;
+import com.sbnz.doctor.services.DiseaseService;
+import com.sbnz.doctor.services.SymptomService;
+import com.sbnz.doctor.services.AllergyService;
+import com.sbnz.doctor.services.IngredientMedService;
+import com.sbnz.doctor.dto.SymptomDTO;
+import com.sbnz.doctor.utils.SymptomList;
+import com.sbnz.doctor.utils.MedicineList;
+import com.sbnz.doctor.utils.CheckAllergyObject;
+import java.util.List;
+import java.util.HashMap;
+
+rule "Alergija"
+	no-loop true
+	agenda-group "Allergy"
+	salience 10
+	lock-on-active true
+    when
+        //conditions
+        $k : CheckAllergyObject( $pacijent : patientId , $mA : medAllergies )
+        $mLista : List() from collect(	MedicineallergyDTO( patientId == $pacijent ) from $mA )
+    then
+        //actions
+        $k.getIsMedAllergic().addAll($mLista);
+		update($k);
+end
+
+rule "Alergija 2"
+	no-loop true
+	agenda-group "Allergy"
+	salience 5
+	lock-on-active true
+    when
+        //conditions
+        $k : CheckAllergyObject( $pacijent : patientId , $sas : allergies  )
+        $sLista: List() from collect(
+        	AllergyDTO( patientId == $pacijent ) from $sas
+        )
+    then
+        //actions
+		$k.getIsAllergic().addAll($sLista);
+		update($k);
+end
