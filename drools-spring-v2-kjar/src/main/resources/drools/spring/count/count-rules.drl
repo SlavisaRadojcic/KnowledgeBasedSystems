@@ -2,20 +2,32 @@
 package rules
 
 //list any import classes here.
+import com.sbnz.doctor.dto.DiagnosisDTO;
+import com.sbnz.doctor.dto.PatientDTO;
+import com.sbnz.doctor.dto.DiseaseDTO;
+import com.sbnz.doctor.dto.MedicineallergyDTO;
+import com.sbnz.doctor.dto.AllergyDTO;
+import com.sbnz.doctor.dto.ReportDiagnosis;
+import com.sbnz.doctor.dto.TherapyReport;
 import com.sbnz.doctor.model.Patient;
 import com.sbnz.doctor.model.Diagnosis;
 import com.sbnz.doctor.model.Symptom;
 import com.sbnz.doctor.model.Disease;
 import com.sbnz.doctor.services.DiseaseService;
 import com.sbnz.doctor.services.SymptomService;
+import com.sbnz.doctor.services.PatientService;
 import com.sbnz.doctor.dto.SymptomDTO;
 import com.sbnz.doctor.utils.SymptomList;
+import com.sbnz.doctor.utils.MedicineList;
+import com.sbnz.doctor.utils.CheckAllergyObject;
+import com.sbnz.doctor.utils.ReportEntity;
 import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Set;
 
 //declare any global variables here
-
+global java.util.Date hirLimit;
 
 
 rule "Prehlada"
@@ -107,6 +119,32 @@ rule "Sinusna infekcija"
 		update($v);
 end
 
+
+
+rule "Visok pritisak"
+	agenda-group "Count diseases"
+	//agenda-group "Disease group 1"
+	salience 50
+	no-loop true
+	lock-on-active true
+    when
+        //conditions
+        $v : SymptomList( $sim : symptoms  )
+        Number ( $n : intValue < 10 ) from accumulate(
+				SymptomDTO( symCode == "HBLPR") from $sim,
+					init ( int count = 0; ),
+					action ( count++; ),
+					result ( count )
+				)
+    then
+        //actions
+        if($n == 1){
+		$v.getMostLikelyDisease().put("HBLPR", 2.0);
+		update($v);
+		}
+end
+
+
 // Disease group 2
 rule "Dijabetes"
 	agenda-group "Count diseases"
@@ -125,33 +163,40 @@ rule "Dijabetes"
 				)
     then
         //action
-        if($n == 4.0){
+        if($n <= 4.0){
         double broj = $n;
 		$v.getMostLikelyDisease().put("DIJBE", broj);
 		update($v);
 		}
 end
 
+
 rule "Hipertenzija"
 	agenda-group "Count diseases"
-	//agenda-group "Disease group 2"
+	//agenda-group "Disease group 	2"
 	salience 50
 	no-loop true
 	lock-on-active true
     when
         //conditions
-        $v : SymptomList( $sim : symptoms  )
-        Number ( $n : intValue ) from accumulate(
-				SymptomDTO( symCode == "VISPR") from $sim,
+       	$v : SymptomList( $sim : symptoms  )
+        $izv : ReportEntity($dijag : diagnoses , $bolesti : diseases , $pacijenti : patients  )
+		$dto: PatientDTO( $pac : patientId  ) from $pacijenti
+        Number ( $n : intValue) from accumulate(
+				DiseaseDTO( $id : diseaseId ) from $bolesti and
+        		SymptomDTO( symCode == "HBLPR") from $sim and ReportDiagnosis( $id == diseaseId && diseaseCode == "HBLPR" && $pac == patientId && diagnosisDate.getTime() >= hirLimit.getTime()) from $dijag,
 					init ( int count = 0; ),
 					action ( count++; ),
 					result ( count )
 				)
     then
         //actions
-		$v.getMostLikelyDisease().put("HIPTE", 1.0);
+        if($n >= 10){
+		$v.getMostLikelyDisease().put("HIPTE", 1000.0);
 		update($v);
+		}
 end
+
 
 // Disease group 3
 rule "Hronicna bubrezna povreda"

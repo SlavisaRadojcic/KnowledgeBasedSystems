@@ -1,5 +1,7 @@
 package com.sbnz.doctor.controller;
 
+import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -27,13 +29,17 @@ import com.sbnz.doctor.dto.DiseaseDTO;
 import com.sbnz.doctor.dto.MyDiagnosisDTO;
 import com.sbnz.doctor.dto.PatientDTO;
 import com.sbnz.doctor.dto.PatientSymptomsDTO;
+import com.sbnz.doctor.dto.ReportDiagnosis;
 import com.sbnz.doctor.dto.SymptomDTO;
+import com.sbnz.doctor.dto.TherapyReport;
 import com.sbnz.doctor.dto.UserDTO;
 import com.sbnz.doctor.interfaces.services.DiagnosisServiceInterface;
 import com.sbnz.doctor.interfaces.services.DiseaseServiceInterface;
 import com.sbnz.doctor.interfaces.services.PatientServiceInterface;
 import com.sbnz.doctor.interfaces.services.SymptomServiceInterface;
+import com.sbnz.doctor.interfaces.services.TherapyServiceInterface;
 import com.sbnz.doctor.utils.MapUtils;
+import com.sbnz.doctor.utils.ReportEntity;
 import com.sbnz.doctor.utils.SymptomList;
 
 
@@ -52,6 +58,12 @@ public class DiagnosisController {
 
 	@Autowired
 	private DiseaseServiceInterface diseaseService;
+	
+	@Autowired
+	private TherapyServiceInterface therapyService;
+
+	@Autowired
+	private DiagnosisServiceInterface diagService;
 
 	@RequestMapping(method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON)
 	public ResponseEntity<List<DiagnosisDTO>> getAll() {
@@ -75,7 +87,7 @@ public class DiagnosisController {
 
 		return new ResponseEntity<DiagnosisDTO>(dto, HttpStatus.OK);
 	}
-
+	
 	@RequestMapping(method = RequestMethod.POST, consumes = MediaType.APPLICATION_JSON, produces = MediaType.APPLICATION_JSON)
 	public ResponseEntity<DiagnosisDTO> add(@Validated @RequestBody DiagnosisDTO body, Errors errors,
 			@Context HttpServletRequest request) {
@@ -184,11 +196,24 @@ public class DiagnosisController {
 		for (SymptomDTO sym : dto.getSymptoms()) {
 			System.out.println(sym.getSymCode());
 		}
+		
+		ArrayList<ReportDiagnosis> reports = (ArrayList<ReportDiagnosis>) diagService.getReportDiagnoses();
+		ReportEntity re = new ReportEntity();
+		re.setDiagnoses(reports);
+		re.setPatients((ArrayList<PatientDTO>) patientService.ReadAll());
+		re.setTherapies((ArrayList<TherapyReport>) therapyService.getTherapyReport());
+		
 		HashMap<String, KieSession> sesije = (HashMap<String, KieSession>) request.getSession().getAttribute("sesije");
 
 		KieSession sesija = sesije.get("rulesSession");
 		SymptomList sl = new SymptomList(dto.getSymptoms());
 		sesija.insert(sl);
+		sesija.insert(re);
+		Calendar cal = Calendar.getInstance();
+		cal.add(Calendar.MONTH, -6);
+		Date hipLimit = cal.getTime();
+		sesija.setGlobal("hipLimit", hipLimit);
+		
 		sesija.getAgenda().getAgendaGroup("Diseases").setFocus();
 
 		int fired = sesija.fireAllRules();
@@ -272,6 +297,12 @@ public class DiagnosisController {
 			SymptomDTO newSym = symService.getByCode("ANB21");
 			dto.getSymptoms().add(newSym);
 		}
+		
+		ArrayList<ReportDiagnosis> reports = (ArrayList<ReportDiagnosis>) diagService.getReportDiagnoses();
+		ReportEntity re = new ReportEntity();
+		re.setDiagnoses(reports);
+		re.setPatients((ArrayList<PatientDTO>) patientService.ReadAll());
+		re.setTherapies((ArrayList<TherapyReport>) therapyService.getTherapyReport());
 
 		HashMap<String, KieSession> sesije = (HashMap<String, KieSession>) request.getSession().getAttribute("sesije");
 		KieSession sesija = sesije.get("countSession");
@@ -281,6 +312,11 @@ public class DiagnosisController {
 		}
 		System.out.println(sl.toString());
 		sesija.insert(sl);
+		sesija.insert(re);
+		Calendar cal = Calendar.getInstance();
+		cal.add(Calendar.MONTH, -6);
+		Date hirLimit = cal.getTime();
+		sesija.setGlobal("hirLimit", hirLimit);
 		sesija.getAgenda().getAgendaGroup("Count diseases").setFocus();
 		sesija.fireAllRules();
 		HashMap<String, Double> retVal = new HashMap<>();
